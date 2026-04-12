@@ -3,6 +3,29 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import '../models/models.dart';
 
+class PersonalExpenseData {
+  final List<Expense> expenses;
+  final double totalAmount;
+  final double pendingAmount;
+  final Map<String, double> categoryBreakdown;
+
+  PersonalExpenseData({
+    required this.expenses,
+    required this.totalAmount,
+    required this.pendingAmount,
+    required this.categoryBreakdown,
+  });
+
+  factory PersonalExpenseData.empty() {
+    return PersonalExpenseData(
+      expenses: [],
+      totalAmount: 0,
+      pendingAmount: 0,
+      categoryBreakdown: {},
+    );
+  }
+}
+
 class FirebaseService {
   static final FirebaseService instance = FirebaseService._init();
 
@@ -23,14 +46,17 @@ class FirebaseService {
       if (user != null) {
         final snapshot = await _database.ref('users/${user.uid}').get();
         String? displayName = user.displayName;
+        String role = 'user';
         if (snapshot.value != null) {
           final userData = Map<String, dynamic>.from(snapshot.value as Map);
           displayName = userData['displayName'] as String? ?? user.displayName;
+          role = userData['role'] as String? ?? 'user';
         }
         final account = Account(
           uid: user.uid,
           email: user.email ?? '',
           displayName: displayName,
+          role: role,
         );
         _authStateController.add(account);
       } else {
@@ -46,10 +72,19 @@ class FirebaseService {
         password: password,
       );
       if (credential.user != null) {
+        final snapshot = await _database
+            .ref('users/${credential.user!.uid}')
+            .get();
+        String role = 'user';
+        if (snapshot.value != null) {
+          final userData = Map<String, dynamic>.from(snapshot.value as Map);
+          role = userData['role'] as String? ?? 'user';
+        }
         return Account(
           uid: credential.user!.uid,
           email: credential.user!.email ?? '',
           displayName: credential.user!.displayName,
+          role: role,
         );
       }
     } on FirebaseAuthException catch (e) {
@@ -72,10 +107,19 @@ class FirebaseService {
         if (displayName != null) {
           await credential.user!.updateDisplayName(displayName);
         }
+        final snapshot = await _database
+            .ref('users/${credential.user!.uid}')
+            .get();
+        String role = 'user';
+        if (snapshot.value != null) {
+          final userData = Map<String, dynamic>.from(snapshot.value as Map);
+          role = userData['role'] as String? ?? 'user';
+        }
         return Account(
           uid: credential.user!.uid,
           email: credential.user!.email ?? '',
           displayName: displayName,
+          role: role,
         );
       }
     } on FirebaseAuthException catch (e) {
@@ -101,9 +145,10 @@ class FirebaseService {
           'uid': uid,
           'email': email,
           'displayName': name,
+          'role': 'user',
           'createdAt': DateTime.now().toIso8601String(),
         });
-        return Account(uid: uid, email: email, displayName: name);
+        return Account(uid: uid, email: email, displayName: name, role: 'user');
       }
     } on FirebaseAuthException catch (e) {
       throw _handleAuthException(e);
@@ -198,6 +243,59 @@ class FirebaseService {
               Expense.fromJson(Map<String, dynamic>.from(entry.value as Map)),
         )
         .toList();
+  }
+
+  Future<PersonalExpenseData> fetchPersonalExpenses() async {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) {
+      return PersonalExpenseData.empty();
+    }
+
+    final userEmail = currentUser.email ?? '';
+    final userName = currentUser.displayName ?? '';
+    final userUid = currentUser.uid;
+
+    final snapshot = await _getExpensesRef().get();
+    if (snapshot.value == null) {
+      return PersonalExpenseData.empty();
+    }
+
+    final Map<dynamic, dynamic> data = snapshot.value as Map<dynamic, dynamic>;
+
+    final allExpenses = data.entries
+        .map(
+          (entry) =>
+              Expense.fromJson(Map<String, dynamic>.from(entry.value as Map)),
+        )
+        .toList();
+
+    final personalExpenses = allExpenses.where((expense) {
+      return expense.claimant == userEmail ||
+          expense.claimant == userName ||
+          expense.claimant == userUid;
+    }).toList();
+
+    final totalAmount = personalExpenses.fold<double>(
+      0,
+      (sum, e) => sum + e.amount,
+    );
+
+    final pendingAmount = personalExpenses
+        .where((e) => e.paymentStatus?.toLowerCase() == 'pending')
+        .fold<double>(0, (sum, e) => sum + e.amount);
+
+    final categoryBreakdown = <String, double>{};
+    for (final expense in personalExpenses) {
+      final cat = expense.category.displayName;
+      categoryBreakdown[cat] = (categoryBreakdown[cat] ?? 0) + expense.amount;
+    }
+
+    return PersonalExpenseData(
+      expenses: personalExpenses,
+      totalAmount: totalAmount,
+      pendingAmount: pendingAmount,
+      categoryBreakdown: categoryBreakdown,
+    );
   }
 
   Stream<List<Project>> watchProjects() {

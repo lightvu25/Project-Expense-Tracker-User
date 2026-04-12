@@ -68,6 +68,8 @@ class Expense {
   final DateTime date;
   final String projectId;
   final String? imageUrl;
+  final String? claimant;
+  final String? paymentStatus;
 
   const Expense({
     required this.id,
@@ -77,6 +79,8 @@ class Expense {
     required this.date,
     required this.projectId,
     this.imageUrl,
+    this.claimant,
+    this.paymentStatus,
   });
 
   Map<String, dynamic> toMap() {
@@ -88,6 +92,8 @@ class Expense {
       'date': date.toIso8601String(),
       'projectId': projectId,
       'imageUrl': imageUrl,
+      'claimant': claimant,
+      'paymentStatus': paymentStatus,
     };
   }
 
@@ -130,6 +136,8 @@ class Expense {
       date: _parseDate(map['date'] as String?),
       projectId: map['projectId'] as String? ?? '',
       imageUrl: map['imageUrl'] as String?,
+      claimant: map['claimant'] as String?,
+      paymentStatus: map['paymentStatus'] as String?,
     );
   }
 
@@ -145,6 +153,8 @@ class Expense {
     DateTime? date,
     String? projectId,
     String? imageUrl,
+    String? claimant,
+    String? paymentStatus,
   }) {
     return Expense(
       id: id ?? this.id,
@@ -154,6 +164,8 @@ class Expense {
       date: date ?? this.date,
       projectId: projectId ?? this.projectId,
       imageUrl: imageUrl ?? this.imageUrl,
+      claimant: claimant ?? this.claimant,
+      paymentStatus: paymentStatus ?? this.paymentStatus,
     );
   }
 }

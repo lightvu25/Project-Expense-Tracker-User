@@ -6,6 +6,7 @@ import 'ui/screens/home_screen.dart';
 import 'ui/screens/search_screen.dart';
 import 'ui/screens/favorites_screen.dart';
 import 'ui/screens/login_screen.dart';
+import 'ui/screens/analytics_screen.dart';
 import 'providers/app_provider.dart';
 import 'services/sqlite_service.dart';
 import 'services/firebase_service.dart';
@@ -80,6 +81,7 @@ class _MainNavigationState extends State<MainNavigation> {
     HomeScreen(),
     SearchScreen(),
     FavoritesScreen(),
+    AnalyticsScreen(),
   ];
 
   @override
@@ -127,6 +129,7 @@ class _MainNavigationState extends State<MainNavigation> {
                 _buildNavItem(0, Icons.home_rounded, 'Home'),
                 _buildNavItem(1, Icons.search_rounded, 'Search'),
                 _buildNavItem(2, Icons.favorite_rounded, 'Favorites'),
+                _buildNavItem(3, Icons.analytics_rounded, 'Analytics'),
               ],
             ),
           ),

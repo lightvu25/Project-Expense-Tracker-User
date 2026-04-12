@@ -145,11 +145,22 @@ class Account {
   final String uid;
   final String email;
   final String? displayName;
+  final String role;
 
-  const Account({required this.uid, required this.email, this.displayName});
+  const Account({
+    required this.uid,
+    required this.email,
+    this.displayName,
+    this.role = 'user',
+  });
 
   Map<String, dynamic> toMap() {
-    return {'uid': uid, 'email': email, 'displayName': displayName};
+    return {
+      'uid': uid,
+      'email': email,
+      'displayName': displayName,
+      'role': role,
+    };
   }
 
   factory Account.fromMap(Map<String, dynamic> map) {
@@ -157,6 +168,7 @@ class Account {
       uid: map['uid'] as String,
       email: map['email'] as String,
       displayName: map['displayName'] as String?,
+      role: map['role'] as String? ?? 'user',
     );
   }
 
