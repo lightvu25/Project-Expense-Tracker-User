@@ -22,10 +22,10 @@ class SqliteService {
 
     return await openDatabase(
       path,
-      version: 4,
+      version: 5,
       onCreate: _createDB,
       onUpgrade: (db, oldVersion, newVersion) async {
-        if (oldVersion < 4) {
+        if (oldVersion < 5) {
           await db.execute('DROP TABLE IF EXISTS favorites');
           await db.execute('DROP TABLE IF EXISTS sync_queue');
           await db.execute('DROP TABLE IF EXISTS expenses');
@@ -38,7 +38,6 @@ class SqliteService {
   }
 
   Future<void> _createDB(Database db, int version) async {
-    // Add "IF NOT EXISTS" to every table creation
     await db.execute('''
       CREATE TABLE IF NOT EXISTS accounts (
         uid TEXT PRIMARY KEY,
@@ -64,7 +63,7 @@ class SqliteService {
       CREATE TABLE IF NOT EXISTS expenses (
         id TEXT PRIMARY KEY,
         projectId TEXT NOT NULL,
-        title TEXT,
+        title TEXT, /* BẠN THÊM DÒNG NÀY VÀO ĐÂY */
         description TEXT,
         amount REAL NOT NULL,
         currency TEXT NOT NULL,
@@ -75,8 +74,7 @@ class SqliteService {
         location TEXT,
         date TEXT NOT NULL,
         imageUrl TEXT,
-        FOREIGN KEY (projectId) REFERENCES projects (id) ON DELETE CASCADE
-      )
+        FOREIGN KEY (projectId) REFERENCES projects (id) ON DELETE CASCADE      )
     ''');
 
     await db.execute('''

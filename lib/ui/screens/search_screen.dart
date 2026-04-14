@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:project_expense_tracker_user/ui/screens/project_details_screen.dart';
 import 'package:provider/provider.dart';
 import '../../models/models.dart';
 import '../theme/app_theme.dart';
@@ -240,7 +241,7 @@ class _SearchScreenState extends State<SearchScreen> {
   void _navigateToProjectDetail(Project project) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => _ProjectDetailScreenWrapper(project: project),
+        builder: (_) => ProjectDetailsScreen(projectId: project.id),
       ),
     );
   }

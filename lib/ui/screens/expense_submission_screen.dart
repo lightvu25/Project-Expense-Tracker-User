@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart' show ImagePicker, ImageSource;
 import 'package:provider/provider.dart';
+import 'package:uuid/uuid.dart';
 import '../../models/models.dart';
 import '../../providers/app_provider.dart';
 import '../../services/cloudinary_service.dart';
@@ -571,7 +572,7 @@ class _ExpenseSubmissionScreenState extends State<ExpenseSubmissionScreen> {
       }
 
       final expense = Expense(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        id: const Uuid().v4(),
         projectId: _selectedProject!.id,
         title: _titleController.text.trim(),
         description: _descriptionController.text.trim(),
