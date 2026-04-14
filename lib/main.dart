@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
@@ -6,7 +7,7 @@ import 'ui/screens/home_screen.dart';
 import 'ui/screens/search_screen.dart';
 import 'ui/screens/favorites_screen.dart';
 import 'ui/screens/login_screen.dart';
-import 'ui/screens/analytics_screen.dart';
+import 'ui/screens/profile_screen.dart';
 import 'providers/app_provider.dart';
 import 'services/sqlite_service.dart';
 import 'services/firebase_service.dart';
@@ -14,13 +15,42 @@ import 'services/firebase_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp();
+  await _initializeWithTimeout(() async {
+    try {
+      await Firebase.initializeApp();
+    } catch (e) {
+      print('Firebase init failed: $e');
+    }
+  }, const Duration(seconds: 10));
 
-  await FirebaseService.instance.initialize();
+  await _initializeWithTimeout(() async {
+    try {
+      await FirebaseService.instance.initialize();
+    } catch (e) {
+      print('Firebase service init failed: $e');
+    }
+  }, const Duration(seconds: 10));
 
-  await SqliteService.instance.database;
+  try {
+    await SqliteService.instance.database;
+  } catch (e) {
+    print('SQLite init failed: $e');
+  }
 
   runApp(const ExpenseTrackerApp());
+}
+
+Future<void> _initializeWithTimeout(
+  Future<void> Function() initFn,
+  Duration timeout,
+) async {
+  try {
+    await initFn().timeout(timeout);
+  } on TimeoutException {
+    print('Init timed out after ${timeout.inSeconds}s - continuing anyway');
+  } catch (e) {
+    print('Init error: $e');
+  }
 }
 
 class ExpenseTrackerApp extends StatelessWidget {
@@ -50,6 +80,14 @@ class AuthWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fbService = FirebaseService.instance;
+    if (fbService.hasFiredInitial) {
+      if (fbService.currentAccount != null) {
+        return const MainNavigation();
+      }
+      return const LoginScreen();
+    }
+
     return StreamBuilder(
       stream: FirebaseService.instance.onAuthStateChanged,
       builder: (context, snapshot) {
@@ -77,11 +115,11 @@ class MainNavigation extends StatefulWidget {
 class _MainNavigationState extends State<MainNavigation> {
   int _currentIndex = 0;
 
-  final List<Widget> _screens = const [
-    HomeScreen(),
-    SearchScreen(),
-    FavoritesScreen(),
-    AnalyticsScreen(),
+  final List<Widget> _screens = [
+    const HomeScreen(),
+    const SearchScreen(),
+    const FavoritesScreen(),
+    const ProfileScreen(),
   ];
 
   @override
@@ -129,7 +167,7 @@ class _MainNavigationState extends State<MainNavigation> {
                 _buildNavItem(0, Icons.home_rounded, 'Home'),
                 _buildNavItem(1, Icons.search_rounded, 'Search'),
                 _buildNavItem(2, Icons.favorite_rounded, 'Favorites'),
-                _buildNavItem(3, Icons.analytics_rounded, 'Analytics'),
+                _buildNavItem(3, Icons.person_rounded, 'Profile'),
               ],
             ),
           ),

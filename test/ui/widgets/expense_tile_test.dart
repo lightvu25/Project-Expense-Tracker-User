@@ -146,7 +146,7 @@ void main() {
       ) async {
         // Arrange
         final marketingExpense = testExpense.copyWith(
-          category: ExpenseCategory.marketing,
+          category: ExpenseCategory.services,
         );
 
         // Act
@@ -176,7 +176,7 @@ void main() {
       ) async {
         // Arrange
         final otherExpense = testExpense.copyWith(
-          category: ExpenseCategory.other,
+          category: ExpenseCategory.miscellaneous,
         );
 
         // Act

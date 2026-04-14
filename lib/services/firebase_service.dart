@@ -29,40 +29,60 @@ class PersonalExpenseData {
 class FirebaseService {
   static final FirebaseService instance = FirebaseService._init();
 
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseDatabase _database = FirebaseDatabase.instance;
+  FirebaseAuth get _auth => FirebaseAuth.instance;
+  FirebaseDatabase get _database => FirebaseDatabase.instance;
 
   final StreamController<Account?> _authStateController =
       StreamController<Account?>.broadcast();
+  bool _isInitialized = false;
+  bool _hasFiredInitial = false;
+  Account? _currentAccount;
 
   FirebaseService._init();
 
   Stream<Account?> get onAuthStateChanged => _authStateController.stream;
   User? get currentUser => _auth.currentUser;
   String? get currentUserUid => _auth.currentUser?.uid;
+  bool get hasFiredInitial => _hasFiredInitial;
+  Account? get currentAccount => _currentAccount;
 
   Future<void> initialize() async {
-    _auth.authStateChanges().listen((user) async {
-      if (user != null) {
-        final snapshot = await _database.ref('users/${user.uid}').get();
-        String? displayName = user.displayName;
-        String role = 'user';
-        if (snapshot.value != null) {
-          final userData = Map<String, dynamic>.from(snapshot.value as Map);
-          displayName = userData['displayName'] as String? ?? user.displayName;
-          role = userData['role'] as String? ?? 'user';
+    if (_isInitialized) return;
+    _isInitialized = true;
+
+    try {
+      _auth.authStateChanges().listen((user) async {
+        if (user != null) {
+          final snapshot = await _database.ref('users/${user.uid}').get();
+          String? displayName = user.displayName;
+          String role = 'user';
+          if (snapshot.value != null) {
+            final userData = Map<String, dynamic>.from(snapshot.value as Map);
+            displayName =
+                userData['displayName'] as String? ?? user.displayName;
+            role = userData['role'] as String? ?? 'user';
+          }
+          final account = Account(
+            uid: user.uid,
+            email: user.email ?? '',
+            displayName: displayName,
+            role: role,
+          );
+          _currentAccount = account;
+          _hasFiredInitial = true;
+          _authStateController.add(account);
+        } else {
+          _currentAccount = null;
+          _hasFiredInitial = true;
+          _authStateController.add(null);
         }
-        final account = Account(
-          uid: user.uid,
-          email: user.email ?? '',
-          displayName: displayName,
-          role: role,
-        );
-        _authStateController.add(account);
-      } else {
-        _authStateController.add(null);
-      }
-    });
+      });
+    } catch (e) {
+      print('FirebaseService initialize failed: $e');
+      _currentAccount = null;
+      _hasFiredInitial = true;
+      _authStateController.add(null);
+    }
   }
 
   Future<Account?> signIn(String email, String password) async {
@@ -197,9 +217,40 @@ class FirebaseService {
     return _database.ref('expenses');
   }
 
+  Map<String, dynamic> _mapProjectData(
+    Map<String, dynamic> data,
+    String? explicitId,
+  ) {
+    final mapped = Map<String, dynamic>.from(data);
+    mapped['id'] = mapped['projectId'] ?? explicitId ?? '';
+    if (mapped['isActive'] == null && mapped['status'] != null) {
+      mapped['isActive'] =
+          mapped['status'] != 'Completed' && mapped['status'] != 'Cancelled';
+    }
+    mapped['budget'] = (mapped['budget'] ?? 0).toDouble();
+    mapped['spent'] = (mapped['spent'] ?? 0).toDouble();
+    return mapped;
+  }
+
+  Map<String, dynamic> _mapExpenseData(Map<String, dynamic> data) {
+    final mapped = Map<String, dynamic>.from(data);
+    mapped['description'] = mapped['description'] ?? mapped['title'] ?? '';
+    mapped['category'] = mapped['category'] ?? mapped['type'] ?? '';
+    mapped['paymentMethod'] =
+        mapped['paymentMethod'] ?? mapped['payment_method'] ?? 'Cash';
+    mapped['paymentStatus'] =
+        mapped['paymentStatus'] ?? mapped['payment_status'] ?? 'Pending';
+    mapped['amount'] = (mapped['amount'] ?? 0).toDouble();
+    return mapped;
+  }
+
   Future<List<Project>> fetchProjectsFromFirebase() async {
-    final projectsSnapshot = await _getProjectsRef().get();
-    final expensesSnapshot = await _getExpensesRef().get();
+    final projectsSnapshot = await _getProjectsRef().get().timeout(
+      const Duration(seconds: 10),
+    );
+    final expensesSnapshot = await _getExpensesRef().get().timeout(
+      const Duration(seconds: 10),
+    );
 
     if (projectsSnapshot.value == null) return [];
 
@@ -211,9 +262,8 @@ class FirebaseService {
     final allExpenses = <String, List<Expense>>{};
     if (expensesData != null) {
       for (final entry in expensesData.entries) {
-        final expense = Expense.fromJson(
-          Map<String, dynamic>.from(entry.value as Map),
-        );
+        final rawExpenseData = Map<String, dynamic>.from(entry.value as Map);
+        final expense = Expense.fromJson(_mapExpenseData(rawExpenseData));
         if (!allExpenses.containsKey(expense.projectId)) {
           allExpenses[expense.projectId] = [];
         }
@@ -226,6 +276,14 @@ class FirebaseService {
       final projectData = Map<String, dynamic>.from(entry.value as Map);
       final projectId = entry.key as String;
       final expenses = allExpenses[projectId] ?? [];
+
+      projectData['id'] = projectData['projectId'] ?? projectId;
+      projectData['isActive'] =
+          projectData['status'] != 'Completed' &&
+          projectData['status'] != 'Cancelled';
+      projectData['budget'] = (projectData['budget'] ?? 0).toDouble();
+      projectData['spent'] = (projectData['spent'] ?? 0).toDouble();
+
       projectData['expenses'] = expenses.map((e) => e.toJson()).toList();
       projects.add(Project.fromJson(projectData));
     }
@@ -237,12 +295,14 @@ class FirebaseService {
     if (snapshot.value == null) return [];
 
     final Map<dynamic, dynamic> data = snapshot.value as Map<dynamic, dynamic>;
-    return data.entries
-        .map(
-          (entry) =>
-              Expense.fromJson(Map<String, dynamic>.from(entry.value as Map)),
-        )
-        .toList();
+    return data.entries.map((entry) {
+      final expenseData = Map<String, dynamic>.from(entry.value as Map);
+      return Expense.fromJson(_mapExpenseData(expenseData));
+    }).toList();
+  }
+
+  Future<void> pushExpenseToFirebase(Expense expense) async {
+    await _getExpensesRef().child(expense.id).set(expense.toJson());
   }
 
   Future<PersonalExpenseData> fetchPersonalExpenses() async {
@@ -262,12 +322,10 @@ class FirebaseService {
 
     final Map<dynamic, dynamic> data = snapshot.value as Map<dynamic, dynamic>;
 
-    final allExpenses = data.entries
-        .map(
-          (entry) =>
-              Expense.fromJson(Map<String, dynamic>.from(entry.value as Map)),
-        )
-        .toList();
+    final allExpenses = data.entries.map((entry) {
+      final rawExpenseData = Map<String, dynamic>.from(entry.value as Map);
+      return Expense.fromJson(_mapExpenseData(rawExpenseData));
+    }).toList();
 
     final personalExpenses = allExpenses.where((expense) {
       return expense.claimant == userEmail ||
@@ -304,12 +362,12 @@ class FirebaseService {
 
       final Map<dynamic, dynamic> data =
           event.snapshot.value as Map<dynamic, dynamic>;
-      return data.entries
-          .map(
-            (entry) =>
-                Project.fromJson(Map<String, dynamic>.from(entry.value as Map)),
-          )
-          .toList();
+      return data.entries.map((entry) {
+        final rawProjectData = Map<String, dynamic>.from(entry.value as Map);
+        return Project.fromJson(
+          _mapProjectData(rawProjectData, entry.key as String),
+        );
+      }).toList();
     });
   }
 

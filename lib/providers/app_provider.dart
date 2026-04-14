@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import '../models/models.dart';
 import '../services/sync_service.dart';
 import '../services/sqlite_service.dart';
-import '../services/firebase_service.dart';
 
 enum SortOption {
   nameAsc,
@@ -40,7 +39,6 @@ extension SortOptionExtension on SortOption {
 
 class AppProvider extends ChangeNotifier {
   final SqliteService _sqliteService = SqliteService.instance;
-  final FirebaseService _firebaseService = FirebaseService.instance;
   final SyncService _syncService = SyncService.instance;
 
   List<Project> _projects = [];
@@ -72,6 +70,8 @@ class AppProvider extends ChangeNotifier {
       _projects.where((p) => p.isActive).toList();
   List<Project> get completedProjects =>
       _projects.where((p) => !p.isActive).toList();
+
+  bool get isAdmin => _currentAccount?.role == 'admin';
 
   int get totalProjectCount => _projects.length;
   int get activeProjectCount => activeProjects.length;
@@ -229,6 +229,11 @@ class AppProvider extends ChangeNotifier {
 
   void clearError() {
     _errorMessage = null;
+    notifyListeners();
+  }
+
+  void setCurrentAccount(Account account) {
+    _currentAccount = account;
     notifyListeners();
   }
 }

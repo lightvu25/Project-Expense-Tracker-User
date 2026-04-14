@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/models.dart';
+import '../models/sync_queue_item.dart';
 
 class SqliteService {
   static final SqliteService instance = SqliteService._init();
@@ -18,12 +20,27 @@ class SqliteService {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
 
-    return await openDatabase(path, version: 1, onCreate: _createDB);
+    return await openDatabase(
+      path,
+      version: 4,
+      onCreate: _createDB,
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 4) {
+          await db.execute('DROP TABLE IF EXISTS favorites');
+          await db.execute('DROP TABLE IF EXISTS sync_queue');
+          await db.execute('DROP TABLE IF EXISTS expenses');
+          await db.execute('DROP TABLE IF EXISTS projects');
+          await db.execute('DROP TABLE IF EXISTS accounts');
+          await _createDB(db, newVersion);
+        }
+      },
+    );
   }
 
   Future<void> _createDB(Database db, int version) async {
+    // Add "IF NOT EXISTS" to every table creation
     await db.execute('''
-      CREATE TABLE accounts (
+      CREATE TABLE IF NOT EXISTS accounts (
         uid TEXT PRIMARY KEY,
         email TEXT NOT NULL,
         displayName TEXT
@@ -31,7 +48,7 @@ class SqliteService {
     ''');
 
     await db.execute('''
-      CREATE TABLE projects (
+      CREATE TABLE IF NOT EXISTS projects (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         description TEXT NOT NULL,
@@ -44,19 +61,37 @@ class SqliteService {
     ''');
 
     await db.execute('''
-      CREATE TABLE expenses (
+      CREATE TABLE IF NOT EXISTS expenses (
         id TEXT PRIMARY KEY,
         projectId TEXT NOT NULL,
-        description TEXT NOT NULL,
+        title TEXT,
+        description TEXT,
         amount REAL NOT NULL,
+        currency TEXT NOT NULL,
         category TEXT NOT NULL,
+        paymentMethod TEXT NOT NULL,
+        claimant TEXT NOT NULL,
+        paymentStatus TEXT NOT NULL,
+        location TEXT,
         date TEXT NOT NULL,
+        imageUrl TEXT,
         FOREIGN KEY (projectId) REFERENCES projects (id) ON DELETE CASCADE
       )
     ''');
 
     await db.execute('''
-      CREATE TABLE favorites (
+      CREATE TABLE IF NOT EXISTS sync_queue (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        actionType TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        timestamp TEXT NOT NULL,
+        retryCount INTEGER NOT NULL DEFAULT 0,
+        errorMessage TEXT
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS favorites (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         projectId TEXT NOT NULL UNIQUE,
         accountUid TEXT NOT NULL,
@@ -65,13 +100,13 @@ class SqliteService {
     ''');
 
     await db.execute(
-      'CREATE INDEX idx_expenses_projectId ON expenses(projectId)',
+      'CREATE INDEX IF NOT EXISTS idx_expenses_projectId ON expenses(projectId)',
     );
     await db.execute(
-      'CREATE INDEX idx_favorites_projectId ON favorites(projectId)',
+      'CREATE INDEX IF NOT EXISTS idx_favorites_projectId ON favorites(projectId)',
     );
     await db.execute(
-      'CREATE INDEX idx_favorites_accountUid ON favorites(accountUid)',
+      'CREATE INDEX IF NOT EXISTS idx_favorites_accountUid ON favorites(accountUid)',
     );
   }
 
@@ -82,9 +117,12 @@ class SqliteService {
 
   Future<void> insertProject(Project project) async {
     final db = await database;
+    final projectMap = Map<String, dynamic>.from(project.toMap());
+    projectMap.remove('isFavorite');
+    projectMap.remove('expenses');
     await db.insert(
       'projects',
-      project.toMap(),
+      projectMap,
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
     for (final expense in project.expenses) {
@@ -122,9 +160,12 @@ class SqliteService {
 
   Future<void> updateProject(Project project) async {
     final db = await database;
+    final projectMap = Map<String, dynamic>.from(project.toMap());
+    projectMap.remove('isFavorite');
+    projectMap.remove('expenses');
     await db.update(
       'projects',
-      project.toMap(),
+      projectMap,
       where: 'id = ?',
       whereArgs: [project.id],
     );
@@ -137,12 +178,24 @@ class SqliteService {
 
   Future<void> insertExpense(Expense expense) async {
     final db = await database;
+    final map = Map<String, dynamic>.from(expense.toMap());
+    map.remove('syncStatus');
     await db.insert(
       'expenses',
-      expense.toMap(),
+      map,
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
     await _updateProjectSpent(expense.projectId);
+  }
+
+  Future<void> insertExpenseAndQueue(Expense expense) async {
+    await insertExpense(expense);
+    final queueItem = SyncQueueItem(
+      actionType: 'CREATE_EXPENSE',
+      payload: jsonEncode(expense.toJson()),
+      timestamp: DateTime.now(),
+    );
+    await enqueueAction(queueItem);
   }
 
   Future<List<Expense>> getExpensesByProjectId(String projectId) async {
@@ -163,9 +216,11 @@ class SqliteService {
 
   Future<void> updateExpense(Expense expense) async {
     final db = await database;
+    final expenseMap = Map<String, dynamic>.from(expense.toMap());
+    expenseMap.remove('syncStatus');
     await db.update(
       'expenses',
-      expense.toMap(),
+      expenseMap,
       where: 'id = ?',
       whereArgs: [expense.id],
     );
@@ -176,6 +231,51 @@ class SqliteService {
     final db = await database;
     await db.delete('expenses', where: 'id = ?', whereArgs: [id]);
     await _updateProjectSpent(projectId);
+  }
+
+  Future<void> insertExpenseWithSyncStatus(
+    Expense expense, {
+    int syncStatus = 0,
+  }) async {
+    final db = await database;
+    final map = expense.toMap();
+    map['syncStatus'] = syncStatus;
+    await db.insert(
+      'expenses',
+      map,
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+    await _updateProjectSpent(expense.projectId);
+  }
+
+  Future<void> enqueueAction(SyncQueueItem item) async {
+    final db = await database;
+    await db.insert('sync_queue', item.toMap()..remove('id'));
+  }
+
+  Future<List<SyncQueueItem>> getQueueItems() async {
+    final db = await database;
+    final maps = await db.query('sync_queue', orderBy: 'timestamp ASC');
+    return maps.map((map) => SyncQueueItem.fromMap(map)).toList();
+  }
+
+  Future<void> removeFromQueue(int id) async {
+    final db = await database;
+    await db.delete('sync_queue', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<void> updateQueueItemRetry(
+    int id,
+    int retryCount,
+    String? errorMessage,
+  ) async {
+    final db = await database;
+    await db.update(
+      'sync_queue',
+      {'retryCount': retryCount, 'errorMessage': errorMessage},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
   }
 
   Future<void> _updateProjectSpent(String projectId) async {
@@ -264,15 +364,20 @@ class SqliteService {
     final db = await database;
     final batch = db.batch();
     for (final project in projects) {
+      final projectMap = Map<String, dynamic>.from(project.toMap());
+      projectMap.remove('isFavorite');
+      projectMap.remove('expenses');
       batch.insert(
         'projects',
-        project.toMap(),
+        projectMap,
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
       for (final expense in project.expenses) {
+        final expenseMap = Map<String, dynamic>.from(expense.toMap());
+        expenseMap.remove('syncStatus');
         batch.insert(
           'expenses',
-          expense.toMap(),
+          expenseMap,
           conflictAlgorithm: ConflictAlgorithm.replace,
         );
       }

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:provider/provider.dart';
 import 'package:project_expense_tracker_user/ui/theme/app_theme.dart';
 
 void main() {

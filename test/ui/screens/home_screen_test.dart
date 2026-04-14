@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:project_expense_tracker_user/ui/screens/home_screen.dart';
 import 'package:project_expense_tracker_user/providers/app_provider.dart';
 import 'package:project_expense_tracker_user/models/project.dart';
+import 'package:project_expense_tracker_user/models/account.dart';
 import 'package:project_expense_tracker_user/models/expense.dart';
 import 'package:project_expense_tracker_user/ui/theme/app_theme.dart';
 import 'package:project_expense_tracker_user/services/sync_service.dart';
@@ -77,6 +78,9 @@ class MockAppProvider extends ChangeNotifier implements AppProvider {
   // Stub implementations for unused methods
   @override
   Account? get currentAccount => null;
+
+  @override
+  bool get isAdmin => false;
 
   @override
   SyncStatus get syncStatus => SyncStatus.idle;
@@ -180,6 +184,9 @@ class MockAppProvider extends ChangeNotifier implements AppProvider {
 
   @override
   Future<void> signOut() async {}
+
+  @override
+  void setCurrentAccount(Account account) {}
 }
 
 void main() {

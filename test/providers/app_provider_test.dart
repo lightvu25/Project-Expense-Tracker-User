@@ -184,7 +184,7 @@ void main() {
               id: 'e2',
               description: 'Facebook Ads',
               amount: 12000.0,
-              category: ExpenseCategory.marketing,
+              category: ExpenseCategory.services,
               date: DateTime(2025, 4, 5),
               projectId: 'p2',
             ),
@@ -284,7 +284,7 @@ void main() {
       test('searchResults_multipleCategories_filtersCorrectly', () {
         // Arrange: Filter by multiple categories
         provider.toggleCategoryFilter(ExpenseCategory.equipment);
-        provider.toggleCategoryFilter(ExpenseCategory.marketing);
+        provider.toggleCategoryFilter(ExpenseCategory.services);
 
         // Act
         final results = provider.searchResults;
@@ -298,7 +298,7 @@ void main() {
       test('searchResults_categoryAndSearch_combinesFilters', () {
         // Arrange: Search query + category filter
         provider.setSearchQuery('campaign');
-        provider.toggleCategoryFilter(ExpenseCategory.marketing);
+        provider.toggleCategoryFilter(ExpenseCategory.services);
 
         // Act
         final results = provider.searchResults;

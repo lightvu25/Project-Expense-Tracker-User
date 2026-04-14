@@ -191,7 +191,7 @@ void main() {
         final expense = Expense.fromMap(map);
 
         // Assert: Falls back to 'other'
-        expect(expense.category, ExpenseCategory.other);
+        expect(expense.category, ExpenseCategory.miscellaneous);
       });
 
       test('fromMap_emptyCategoryString_fallsToOther', () {
@@ -208,7 +208,7 @@ void main() {
         // Act
         final expense = Expense.fromMap(map);
 
-        expect(expense.category, ExpenseCategory.other);
+        expect(expense.category, ExpenseCategory.miscellaneous);
       });
 
       test('fromMap_amountFallback_nullValue', () {
@@ -256,7 +256,7 @@ void main() {
         expect(expense.id, '');
         expect(expense.description, 'Untitled');
         expect(expense.amount, 0.0);
-        expect(expense.category, ExpenseCategory.other);
+        expect(expense.category, ExpenseCategory.miscellaneous);
         expect(expense.projectId, '');
       });
 
@@ -301,9 +301,9 @@ void main() {
         expect(ExpenseCategory.equipment.displayName, 'Equipment');
         expect(ExpenseCategory.labor.displayName, 'Labor');
         expect(ExpenseCategory.software.displayName, 'Software');
-        expect(ExpenseCategory.marketing.displayName, 'Marketing');
+        expect(ExpenseCategory.services.displayName, 'Marketing');
         expect(ExpenseCategory.utilities.displayName, 'Utilities');
-        expect(ExpenseCategory.other.displayName, 'Other');
+        expect(ExpenseCategory.miscellaneous.displayName, 'Other');
       });
 
       test('categoryExtension_allIcons_correct', () {
@@ -313,9 +313,9 @@ void main() {
         expect(ExpenseCategory.equipment.icon, '🔧');
         expect(ExpenseCategory.labor.icon, '👷');
         expect(ExpenseCategory.software.icon, '💻');
-        expect(ExpenseCategory.marketing.icon, '📢');
+        expect(ExpenseCategory.services.icon, '📢');
         expect(ExpenseCategory.utilities.icon, '💡');
-        expect(ExpenseCategory.other.icon, '📦');
+        expect(ExpenseCategory.miscellaneous.icon, '📦');
       });
 
       test('categoryExtension_fromString_parsesCorrectly', () {
@@ -342,7 +342,7 @@ void main() {
         );
         expect(
           ExpenseCategoryExtension.fromString('marketing'),
-          ExpenseCategory.marketing,
+          ExpenseCategory.services,
         );
         expect(
           ExpenseCategoryExtension.fromString('utilities'),
@@ -350,7 +350,7 @@ void main() {
         );
         expect(
           ExpenseCategoryExtension.fromString('other'),
-          ExpenseCategory.other,
+          ExpenseCategory.miscellaneous,
         );
       });
 
@@ -358,11 +358,11 @@ void main() {
         // Assert: fromString is case-sensitive
         expect(
           ExpenseCategoryExtension.fromString('MATERIALS'),
-          ExpenseCategory.other,
+          ExpenseCategory.miscellaneous,
         );
         expect(
           ExpenseCategoryExtension.fromString('Materials'),
-          ExpenseCategory.other,
+          ExpenseCategory.miscellaneous,
         );
       });
 
@@ -370,9 +370,12 @@ void main() {
         // Assert: Unknown value falls to 'other'
         expect(
           ExpenseCategoryExtension.fromString('invalid'),
-          ExpenseCategory.other,
+          ExpenseCategory.miscellaneous,
         );
-        expect(ExpenseCategoryExtension.fromString(''), ExpenseCategory.other);
+        expect(
+          ExpenseCategoryExtension.fromString(''),
+          ExpenseCategory.miscellaneous,
+        );
       });
     });
 
@@ -381,10 +384,14 @@ void main() {
         // Arrange: Create expense with known values
         final expense = Expense(
           id: 'e1',
-          description: 'Office furniture',
-          amount: 12500.0,
-          category: ExpenseCategory.materials,
           date: DateTime(2025, 3, 15),
+          amount: 12500.0,
+          currency: 'USD',
+          category: ExpenseCategory.materials,
+          paymentMethod: 'Cash',
+          claimant: 'test@example.com',
+          paymentStatus: 'Pending',
+          description: 'Office furniture',
           projectId: 'p1',
         );
 
@@ -404,10 +411,14 @@ void main() {
         // Arrange
         final expense = Expense(
           id: 'e1',
-          description: 'Test',
-          amount: 100.0,
-          category: ExpenseCategory.other,
           date: DateTime(2025, 6, 15, 10, 30),
+          amount: 100.0,
+          currency: 'USD',
+          category: ExpenseCategory.miscellaneous,
+          paymentMethod: 'Cash',
+          claimant: 'test@example.com',
+          paymentStatus: 'Pending',
+          description: 'Test',
           projectId: 'p1',
         );
 
@@ -474,7 +485,7 @@ void main() {
           id: 'e1',
           description: 'Test',
           amount: 100.0,
-          category: ExpenseCategory.other,
+          category: ExpenseCategory.miscellaneous,
           date: DateTime(2025, 1, 1),
           projectId: 'p1',
         );

@@ -1,143 +1,149 @@
 enum ExpenseCategory {
-  materials,
   travel,
   equipment,
-  labor,
+  materials,
+  services,
   software,
-  marketing,
+  labor,
   utilities,
-  other,
+  miscellaneous,
 }
 
 extension ExpenseCategoryExtension on ExpenseCategory {
   String get displayName {
     switch (this) {
-      case ExpenseCategory.materials:
-        return 'Materials';
       case ExpenseCategory.travel:
         return 'Travel';
       case ExpenseCategory.equipment:
         return 'Equipment';
-      case ExpenseCategory.labor:
-        return 'Labor';
+      case ExpenseCategory.materials:
+        return 'Materials';
+      case ExpenseCategory.services:
+        return 'Services';
       case ExpenseCategory.software:
-        return 'Software';
-      case ExpenseCategory.marketing:
-        return 'Marketing';
+        return 'Software/Licenses';
+      case ExpenseCategory.labor:
+        return 'Labour costs';
       case ExpenseCategory.utilities:
         return 'Utilities';
-      case ExpenseCategory.other:
-        return 'Other';
+      case ExpenseCategory.miscellaneous:
+        return 'Miscellaneous';
     }
   }
 
   String get icon {
     switch (this) {
-      case ExpenseCategory.materials:
-        return '🛒';
       case ExpenseCategory.travel:
         return '✈️';
       case ExpenseCategory.equipment:
         return '🔧';
-      case ExpenseCategory.labor:
-        return '👷';
+      case ExpenseCategory.materials:
+        return '🛒';
+      case ExpenseCategory.services:
+        return '🔼';
       case ExpenseCategory.software:
         return '💻';
-      case ExpenseCategory.marketing:
-        return '📢';
+      case ExpenseCategory.labor:
+        return '👷';
       case ExpenseCategory.utilities:
         return '💡';
-      case ExpenseCategory.other:
+      case ExpenseCategory.miscellaneous:
         return '📦';
     }
   }
 
   static ExpenseCategory fromString(String value) {
     return ExpenseCategory.values.firstWhere(
-      (e) => e.name == value,
-      orElse: () => ExpenseCategory.other,
+      (e) => e.displayName == value || e.name == value,
+      orElse: () => ExpenseCategory.miscellaneous,
     );
+  }
+}
+
+DateTime _parseDate(String? dateStr) {
+  if (dateStr == null) return DateTime.now();
+  try {
+    return DateTime.parse(dateStr);
+  } catch (_) {
+    try {
+      final parts = dateStr.split('/');
+      if (parts.length == 3) {
+        final day = int.parse(parts[0]);
+        final month = int.parse(parts[1]);
+        final year = int.parse(parts[2]);
+        return DateTime(year, month, day);
+      }
+    } catch (_) {}
+    return DateTime.now();
   }
 }
 
 class Expense {
   final String id;
-  final String description;
-  final double amount;
-  final ExpenseCategory category;
   final DateTime date;
-  final String projectId;
+  final double amount;
+  final String currency;
+  final ExpenseCategory category;
+  final String paymentMethod;
+  final String claimant;
+  final String paymentStatus;
+  final String? title;
+  final String? description;
+  final String? location;
   final String? imageUrl;
-  final String? claimant;
-  final String? paymentStatus;
+  final String projectId;
 
   const Expense({
     required this.id,
-    required this.description,
-    required this.amount,
-    required this.category,
     required this.date,
-    required this.projectId,
+    required this.amount,
+    this.currency = 'USD',
+    required this.category,
+    this.paymentMethod = 'Cash',
+    this.claimant = '',
+    this.paymentStatus = 'Pending',
+    this.title,
+    this.description,
+    this.location,
     this.imageUrl,
-    this.claimant,
-    this.paymentStatus,
+    required this.projectId,
   });
 
   Map<String, dynamic> toMap() {
     return {
       'id': id,
-      'description': description,
-      'amount': amount,
-      'category': category.name,
       'date': date.toIso8601String(),
-      'projectId': projectId,
-      'imageUrl': imageUrl,
+      'amount': amount,
+      'currency': currency,
+      'category': category.name,
+      'paymentMethod': paymentMethod,
       'claimant': claimant,
       'paymentStatus': paymentStatus,
+      'title': title,
+      'description': description,
+      'location': location,
+      'imageUrl': imageUrl,
+      'projectId': projectId,
     };
   }
 
-  static DateTime _parseDate(String? dateStr) {
-    if (dateStr == null) return DateTime.now();
-    try {
-      return DateTime.parse(dateStr);
-    } catch (_) {
-      try {
-        final parts = dateStr.split('/');
-        if (parts.length == 3) {
-          final day = int.parse(parts[0]);
-          final month = int.parse(parts[1]);
-          final year = int.parse(parts[2]);
-          return DateTime(year, month, day);
-        }
-      } catch (_) {}
-      return DateTime.now();
-    }
-  }
-
   factory Expense.fromMap(Map<String, dynamic> map) {
-    // Dart field takes priority over Java field
-    final desc =
-        map['description'] as String? ?? map['title'] as String? ?? 'Untitled';
-
-    // Safe amount parsing
-    final amountVal = (map['amount'] as num?)?.toDouble() ?? 0.0;
-
-    // Dart field takes priority over Java field
-    final categoryStr =
-        map['category'] as String? ?? map['type'] as String? ?? '';
-    final categoryVal = ExpenseCategoryExtension.fromString(categoryStr);
-
     return Expense(
       id: map['id'] as String? ?? '',
-      description: desc,
-      amount: amountVal,
-      category: categoryVal,
       date: _parseDate(map['date'] as String?),
-      projectId: map['projectId'] as String? ?? '',
+      amount: (map['amount'] as num?)?.toDouble() ?? 0.0,
+      currency: map['currency'] as String? ?? 'USD',
+      category: ExpenseCategoryExtension.fromString(
+        map['category'] as String? ?? '',
+      ),
+      paymentMethod: map['paymentMethod'] as String? ?? 'Cash',
+      claimant: map['claimant'] as String? ?? '',
+      paymentStatus: map['paymentStatus'] as String? ?? 'Pending',
+      title: map['title'] as String?,
+      description: map['description'] as String?,
+      location: map['location'] as String?,
       imageUrl: map['imageUrl'] as String?,
-      claimant: map['claimant'] as String?,
-      paymentStatus: map['paymentStatus'] as String?,
+      projectId: map['projectId'] as String? ?? '',
     );
   }
 
@@ -147,25 +153,33 @@ class Expense {
 
   Expense copyWith({
     String? id,
-    String? description,
-    double? amount,
-    ExpenseCategory? category,
     DateTime? date,
-    String? projectId,
-    String? imageUrl,
+    double? amount,
+    String? currency,
+    ExpenseCategory? category,
+    String? paymentMethod,
     String? claimant,
     String? paymentStatus,
+    String? title,
+    String? description,
+    String? location,
+    String? imageUrl,
+    String? projectId,
   }) {
     return Expense(
       id: id ?? this.id,
-      description: description ?? this.description,
-      amount: amount ?? this.amount,
-      category: category ?? this.category,
       date: date ?? this.date,
-      projectId: projectId ?? this.projectId,
-      imageUrl: imageUrl ?? this.imageUrl,
+      amount: amount ?? this.amount,
+      currency: currency ?? this.currency,
+      category: category ?? this.category,
+      paymentMethod: paymentMethod ?? this.paymentMethod,
       claimant: claimant ?? this.claimant,
       paymentStatus: paymentStatus ?? this.paymentStatus,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      location: location ?? this.location,
+      imageUrl: imageUrl ?? this.imageUrl,
+      projectId: projectId ?? this.projectId,
     );
   }
 }

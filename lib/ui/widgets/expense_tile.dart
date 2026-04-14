@@ -44,7 +44,7 @@ class ExpenseTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    expense.description,
+                    expense.description ?? '',
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
@@ -103,11 +103,11 @@ class ExpenseTile extends StatelessWidget {
         return AppTheme.primaryCyan;
       case ExpenseCategory.software:
         return AppTheme.primaryGreen;
-      case ExpenseCategory.marketing:
-        return const Color(0xFF8B5CF6);
+      case ExpenseCategory.services:
+        return AppTheme.warning;
       case ExpenseCategory.utilities:
         return const Color(0xFF06B6D4);
-      case ExpenseCategory.other:
+      case ExpenseCategory.miscellaneous:
         return AppTheme.textSecondary;
     }
   }

@@ -370,7 +370,7 @@ class _ProjectDetailScreenWrapper extends StatelessWidget {
                         ),
                       ),
                       title: Text(
-                        expense.description,
+                        expense.description ?? '',
                         style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w500,

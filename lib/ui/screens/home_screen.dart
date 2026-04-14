@@ -6,8 +6,8 @@ import '../widgets/hero_card.dart';
 import '../widgets/favorite_projects_chips.dart';
 import '../widgets/project_card.dart';
 import '../widgets/shimmer_loading.dart';
-import '../widgets/staggered_animation.dart';
 import '../../providers/app_provider.dart';
+import 'project_details_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -78,7 +78,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           const SizedBox(width: 8),
                           CircleAvatar(
                             radius: 24,
-                            backgroundColor: AppTheme.primaryCyan.withOpacity(0.1),
+                            backgroundColor: AppTheme.primaryCyan.withOpacity(
+                              0.1,
+                            ),
                             child: const Icon(
                               Icons.person,
                               color: AppTheme.primaryCyan,
@@ -157,7 +159,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                           const SizedBox(height: 16),
                           Text(
-                            'No projects yet',
+                            'No projects available',
                             style: TextStyle(
                               fontSize: 16,
                               color: AppTheme.textSecondary,
@@ -165,7 +167,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Tap + to create your first project',
+                            'Please wait for an admin to assign one.',
                             style: TextStyle(
                               fontSize: 14,
                               color: AppTheme.textMuted,
@@ -180,42 +182,39 @@ class _HomeScreenState extends State<HomeScreen> {
                 SliverPadding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final project = projects[index];
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: ProjectCard(
-                            project: project,
-                            onTap: () => _navigateToProjectDetail(project),
-                            onFavoriteToggle: () =>
-                                provider.toggleFavorite(project.id),
-                          ),
-                        );
-                      },
-                      childCount: projects.length,
-                    ),
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      final project = projects[index];
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: ProjectCard(
+                          project: project,
+                          onTap: () => _navigateToProjectDetail(project),
+                          onFavoriteToggle: () =>
+                              provider.toggleFavorite(project.id),
+                        ),
+                      );
+                    }, childCount: projects.length),
                   ),
                 ),
-              const SliverToBoxAdapter(
-                child: SizedBox(height: 80),
-              ),
+              const SliverToBoxAdapter(child: SizedBox(height: 80)),
             ],
           ),
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAddProjectDialog(context),
-        backgroundColor: AppTheme.primaryCyan,
-        child: const Icon(Icons.add, color: Colors.white),
-      ),
+      floatingActionButton: provider.isAdmin
+          ? FloatingActionButton(
+              onPressed: () => _showAddProjectDialog(context),
+              backgroundColor: AppTheme.primaryCyan,
+              child: const Icon(Icons.add, color: Colors.white),
+            )
+          : null,
     );
   }
 
   void _navigateToProjectDetail(Project project) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => Container(),
+        builder: (_) => ProjectDetailsScreen(projectId: project.id),
       ),
     );
   }
