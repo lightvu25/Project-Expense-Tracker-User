@@ -39,9 +39,23 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } catch (e) {
       if (mounted) {
+        String errorMessage = 'An error occurred. Please try again.';
+        
+        final errorStr = e.toString().toLowerCase();
+        if (errorStr.contains('wrong password') || 
+            errorStr.contains('invalid credential') ||
+            errorStr.contains('user-not-found') ||
+            errorStr.contains('email') && errorStr.contains('password')) {
+          errorMessage = 'Wrong email or password. Please try again.';
+        } else if (errorStr.contains('network')) {
+          errorMessage = 'Network error. Please check your connection.';
+        } else if (errorStr.contains('too many requests')) {
+          errorMessage = 'Too many attempts. Please try again later.';
+        }
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.toString()),
+            content: Text(errorMessage),
             backgroundColor: AppTheme.error,
           ),
         );

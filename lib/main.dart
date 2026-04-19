@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 import 'ui/theme/app_theme.dart';
 import 'ui/screens/home_screen.dart';
@@ -14,6 +15,12 @@ import 'services/firebase_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  try {
+    await dotenv.load(fileName: '.env');
+  } catch (e) {
+    print('Failed to load .env file: $e');
+  }
 
   await _initializeWithTimeout(() async {
     try {

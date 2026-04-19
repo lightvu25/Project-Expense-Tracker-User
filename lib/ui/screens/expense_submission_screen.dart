@@ -6,9 +6,11 @@ import 'package:uuid/uuid.dart';
 import '../../models/models.dart';
 import '../../providers/app_provider.dart';
 import '../../services/cloudinary_service.dart';
+import '../../services/groq_api_service.dart';
 import '../../services/sqlite_service.dart';
 import '../../services/sync_service.dart';
 import '../theme/app_theme.dart';
+import 'map_picker_screen.dart';
 
 class ExpenseSubmissionScreen extends StatefulWidget {
   final String? preSelectedProjectId;
@@ -35,7 +37,7 @@ class _ExpenseSubmissionScreenState extends State<ExpenseSubmissionScreen> {
   final ImagePicker _imagePicker = ImagePicker();
   File? _selectedImage;
 
-  Project? _selectedProject;
+  String? _selectedProjectId;
   ExpenseCategory _selectedCategory = ExpenseCategory.miscellaneous;
   DateTime _selectedDate = DateTime.now();
   bool _isSubmitting = false;
@@ -46,6 +48,7 @@ class _ExpenseSubmissionScreenState extends State<ExpenseSubmissionScreen> {
     super.initState();
     final user = context.read<AppProvider>().currentAccount;
     _claimantController.text = user?.email ?? '';
+    _selectedProjectId = widget.preSelectedProjectId;
   }
 
   @override
@@ -122,7 +125,11 @@ class _ExpenseSubmissionScreenState extends State<ExpenseSubmissionScreen> {
   }
 
   Widget _buildProjectDropdown(List<Project> projects) {
-    if (_isProjectLocked && _selectedProject != null) {
+    if (_isProjectLocked && _selectedProjectId != null) {
+      final project = projects.firstWhere(
+        (p) => p.id == _selectedProjectId,
+        orElse: () => projects.first,
+      );
       return Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -136,7 +143,7 @@ class _ExpenseSubmissionScreenState extends State<ExpenseSubmissionScreen> {
               style: TextStyle(color: AppTheme.textSecondary),
             ),
             Text(
-              _selectedProject!.name,
+              project.name,
               style: const TextStyle(
                 fontWeight: FontWeight.bold,
                 color: AppTheme.textPrimary,
@@ -147,8 +154,8 @@ class _ExpenseSubmissionScreenState extends State<ExpenseSubmissionScreen> {
       );
     }
 
-    return DropdownButtonFormField<Project>(
-      value: _selectedProject,
+    return DropdownButtonFormField<String>(
+      value: _selectedProjectId,
       decoration: InputDecoration(
         labelText: 'Select Project',
         filled: true,
@@ -159,17 +166,20 @@ class _ExpenseSubmissionScreenState extends State<ExpenseSubmissionScreen> {
         ),
       ),
       items: projects.map((project) {
-        return DropdownMenuItem(value: project, child: Text(project.name));
+        return DropdownMenuItem(
+          value: project.id,
+          child: Text(project.name),
+        );
       }).toList(),
       onChanged: _isProjectLocked
           ? null
-          : (project) {
+          : (id) {
               setState(() {
-                _selectedProject = project;
+                _selectedProjectId = id;
               });
             },
-      validator: (project) {
-        if (project == null) {
+      validator: (id) {
+        if (id == null) {
           return 'Please select a project';
         }
         return null;
@@ -447,8 +457,25 @@ class _ExpenseSubmissionScreenState extends State<ExpenseSubmissionScreen> {
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,
         ),
+        suffixIcon: IconButton(
+          icon: const Icon(Icons.map, color: AppTheme.primaryCyan),
+          onPressed: _openMapPicker,
+          tooltip: 'Pick location from map',
+        ),
       ),
     );
+  }
+
+  Future<void> _openMapPicker() async {
+    final result = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (context) => const MapPickerScreen()),
+    );
+    if (result != null && result.isNotEmpty) {
+      setState(() {
+        _locationController.text = result;
+      });
+    }
   }
 
   Widget _buildImagePicker() {
@@ -518,9 +545,131 @@ class _ExpenseSubmissionScreenState extends State<ExpenseSubmissionScreen> {
               ],
             ),
           ],
+          const SizedBox(height: 16),
+          const Divider(),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _scanReceiptWithAI,
+              icon: const Icon(Icons.auto_awesome),
+              label: const Text('Scan Receipt with AI'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryPurple,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  Future<void> _scanReceiptWithAI() async {
+    try {
+      final pickedFile = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 85,
+      );
+
+      if (pickedFile == null) return;
+
+      final imageFile = File(pickedFile.path);
+
+      if (!mounted) return;
+
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext dialogContext) => const AlertDialog(
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Analyzing receipt with AI...'),
+            ],
+          ),
+        ),
+      );
+
+      final result = await GroqApiService.analyzeReceipt(imageFile);
+
+      if (!mounted) return;
+
+      Navigator.of(context, rootNavigator: true).pop();
+
+      if (result != null) {
+        setState(() {
+          if (result['title'] != null) {
+            _titleController.text = result['title'].toString();
+          }
+          if (result['amount'] != null) {
+            _amountController.text = result['amount'].toString();
+          }
+          if (result['date'] != null) {
+            try {
+              final date = DateTime.parse(result['date'].toString());
+              _selectedDate = date;
+            } catch (_) {}
+          }
+          if (result['location'] != null) {
+            _locationController.text = result['location'].toString();
+          }
+          if (result['description'] != null) {
+            _descriptionController.text = result['description'].toString();
+          }
+          if (result['category'] != null) {
+            _selectedCategory = _mapCategory(result['category'].toString());
+          }
+          _selectedImage = imageFile;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Receipt scanned successfully! Please review and edit if needed.'),
+            backgroundColor: AppTheme.success,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to extract data from receipt. Please try again.'),
+            backgroundColor: AppTheme.error,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      Navigator.of(context, rootNavigator: true).pop();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  ExpenseCategory _mapCategory(String category) {
+    final lowerCategory = category.toLowerCase().trim();
+    for (final cat in ExpenseCategory.values) {
+      if (cat.name.toLowerCase() == lowerCategory) {
+        return cat;
+      }
+      if (lowerCategory.contains(cat.name.toLowerCase())) {
+        return cat;
+      }
+    }
+    return ExpenseCategory.miscellaneous;
   }
 
   Future<void> _pickImage(ImageSource source) async {
@@ -550,7 +699,7 @@ class _ExpenseSubmissionScreenState extends State<ExpenseSubmissionScreen> {
 
   Future<void> _submitExpense() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_selectedProject == null) return;
+    if (_selectedProjectId == null) return;
 
     setState(() {
       _isSubmitting = true;
@@ -560,20 +709,25 @@ class _ExpenseSubmissionScreenState extends State<ExpenseSubmissionScreen> {
       String? imageUrl;
 
       if (_selectedImage != null) {
-        imageUrl = await CloudinaryService.uploadImage(_selectedImage!);
-        if (imageUrl == null && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Failed to upload image. Saving without receipt.'),
-              backgroundColor: Colors.orange,
-            ),
-          );
+        try {
+          imageUrl = await CloudinaryService.uploadImage(_selectedImage!);
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Image upload failed: ${e.toString()}'),
+                backgroundColor: AppTheme.error,
+              ),
+            );
+          }
+          setState(() => _isSubmitting = false);
+          return;
         }
       }
 
       final expense = Expense(
         id: const Uuid().v4(),
-        projectId: _selectedProject!.id,
+        projectId: _selectedProjectId!,
         title: _titleController.text.trim(),
         description: _descriptionController.text.trim(),
         amount: double.parse(_amountController.text),
