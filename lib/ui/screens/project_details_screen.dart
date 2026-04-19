@@ -70,14 +70,15 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen> {
           ? const Center(child: CircularProgressIndicator())
           : _buildContent(),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.of(context).push(
+        onPressed: () async {
+          await Navigator.of(context).push(
             MaterialPageRoute(
               builder: (_) => ExpenseSubmissionScreen(
                 preSelectedProjectId: widget.projectId,
               ),
             ),
           );
+          _loadProjectData();
         },
         backgroundColor: AppTheme.primaryCyan,
         child: const Icon(Icons.add, color: Colors.white),

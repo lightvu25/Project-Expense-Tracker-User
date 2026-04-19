@@ -234,12 +234,11 @@ class FirebaseService {
 
   Map<String, dynamic> _mapExpenseData(Map<String, dynamic> data) {
     final mapped = Map<String, dynamic>.from(data);
+    mapped['projectId'] = mapped['projectId'] ?? mapped['project_id'] ?? '';
     mapped['description'] = mapped['description'] ?? mapped['title'] ?? '';
     mapped['category'] = mapped['category'] ?? mapped['type'] ?? '';
-    mapped['paymentMethod'] =
-        mapped['paymentMethod'] ?? mapped['payment_method'] ?? 'Cash';
-    mapped['paymentStatus'] =
-        mapped['paymentStatus'] ?? mapped['payment_status'] ?? 'Pending';
+    mapped['paymentMethod'] = mapped['paymentMethod'] ?? mapped['payment_method'] ?? 'Cash';
+    mapped['paymentStatus'] = mapped['paymentStatus'] ?? mapped['payment_status'] ?? 'Pending';
     mapped['amount'] = (mapped['amount'] ?? 0).toDouble();
     return mapped;
   }
@@ -255,14 +254,17 @@ class FirebaseService {
     if (projectsSnapshot.value == null) return [];
 
     final Map<dynamic, dynamic> projectsData =
-        projectsSnapshot.value as Map<dynamic, dynamic>;
+    projectsSnapshot.value as Map<dynamic, dynamic>;
     final Map<dynamic, dynamic>? expensesData =
-        expensesSnapshot.value as Map<dynamic, dynamic>?;
+    expensesSnapshot.value as Map<dynamic, dynamic>?;
 
     final allExpenses = <String, List<Expense>>{};
     if (expensesData != null) {
       for (final entry in expensesData.entries) {
         final rawExpenseData = Map<String, dynamic>.from(entry.value as Map);
+
+        rawExpenseData['id'] = rawExpenseData['id'] ?? entry.key;
+
         final expense = Expense.fromJson(_mapExpenseData(rawExpenseData));
         if (!allExpenses.containsKey(expense.projectId)) {
           allExpenses[expense.projectId] = [];
@@ -274,13 +276,15 @@ class FirebaseService {
     final projects = <Project>[];
     for (final entry in projectsData.entries) {
       final projectData = Map<String, dynamic>.from(entry.value as Map);
-      final projectId = entry.key as String;
-      final expenses = allExpenses[projectId] ?? [];
+      final String firebaseKey = entry.key as String;
 
-      projectData['id'] = projectData['projectId'] ?? projectId;
+      final String resolvedProjectId = projectData['projectId'] ?? projectData['id'] ?? firebaseKey;
+      final expenses = allExpenses[resolvedProjectId] ?? [];
+
+      projectData['id'] = resolvedProjectId;
       projectData['isActive'] =
           projectData['status'] != 'Completed' &&
-          projectData['status'] != 'Cancelled';
+              projectData['status'] != 'Cancelled';
       projectData['budget'] = (projectData['budget'] ?? 0).toDouble();
       projectData['spent'] = (projectData['spent'] ?? 0).toDouble();
 
@@ -289,7 +293,6 @@ class FirebaseService {
     }
     return projects;
   }
-
   Future<List<Expense>> fetchAllExpensesFromFirebase() async {
     final snapshot = await _getExpensesRef().get();
     if (snapshot.value == null) return [];
